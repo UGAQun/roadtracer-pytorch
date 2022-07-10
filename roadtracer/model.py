@@ -1,5 +1,5 @@
 import numpy
-import tensorflow as tf
+import torch as tf
 import os
 import os.path
 import random
@@ -10,8 +10,9 @@ from PIL import Image
 BATCH_SIZE = 4
 KERNEL_SIZE = 3
 
+
 class Model:
-	def _conv_layer(self, name, input_var, stride, in_channels, out_channels, options = {}):
+	def _conv_layer(self, name, input_var, stride, in_channels, out_channels, options={}):
 		activation = options.get('activation', 'relu')
 		dropout = options.get('dropout', None)
 		padding = options.get('padding', 'SAME')
@@ -72,7 +73,7 @@ class Model:
 			else:
 				raise Exception('invalid activation {} specified'.format(activation))
 
-	def _fc_layer(self, name, input_var, input_size, output_size, options = {}):
+	def _fc_layer(self, name, input_var, input_size, output_size, options={}):
 		activation = options.get('activation', 'relu')
 		dropout = options.get('dropout', None)
 		batchnorm = options.get('batchnorm', True)
@@ -114,7 +115,7 @@ class Model:
 		self.action_targets = tf.placeholder(tf.float32, [None, 2])
 		self.detect_targets = tf.placeholder(tf.float32, [None, 64, 64, 1])
 		self.learning_rate = tf.placeholder(tf.float32)
-
+		# _conv_layer(self, name, input_var, stride, in_channels, out_channels, options={})
 		# layers
 		self.layer1 = self._conv_layer('layer1', self.inputs, 2, input_channels, 128) # -> 128x128x128
 		self.layer2 = self._conv_layer('layer2', self.layer1, 1, 128, 128) # -> 128x128x128
@@ -122,6 +123,7 @@ class Model:
 		self.layer4 = self._conv_layer('layer4', self.layer3, 1, 256, 256) # -> 64x64x256
 		self.layer5 = self._conv_layer('layer5', self.layer4, 1, 256, 256) # -> 64x64x256
 		self.layer6 = self._conv_layer('layer6', self.layer5, 1, 256, 256) # -> 64x64x256
+
 		self.layer7 = self._conv_layer('layer7', self.layer6, 2, 256, 512) # -> 32x32x512
 		self.layer8 = self._conv_layer('layer8', self.layer7, 1, 512, 512) # -> 32x32x512
 		self.layer9 = self._conv_layer('layer9', self.layer8, 2, 512, 512) # -> 16x16x512

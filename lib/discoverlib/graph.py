@@ -5,6 +5,7 @@ import math
 import numpy
 import rtree
 
+
 class Vertex(object):
 	def __init__(self, id, point):
 		self.id = id
@@ -25,6 +26,7 @@ class Vertex(object):
 
 	def __repr__(self):
 		return 'Vertex({}, {}, {} in {} out)'.format(self.id, self.point, len(self.in_edges), len(self.out_edges))
+
 
 class Edge(object):
 	def __init__(self, id, src, dst):
@@ -60,6 +62,7 @@ class Edge(object):
 		else:
 			return self.id
 
+
 class EdgePos(object):
 	def __init__(self, edge, distance):
 		self.edge = edge
@@ -76,6 +79,7 @@ class EdgePos(object):
 	def reverse(self):
 		return EdgePos(self.edge.get_opposite_edge(), self.edge.segment().length() - self.distance)
 
+
 class Index(object):
 	def __init__(self, graph, index):
 		self.graph = graph
@@ -88,6 +92,7 @@ class Index(object):
 	def subgraph(self, rect):
 		return graph_from_edges(self.search(rect))
 
+
 def graph_from_edges(edges):
 	ng = Graph()
 	vertex_map = {}
@@ -98,6 +103,7 @@ def graph_from_edges(edges):
 		nedge = ng.add_edge(vertex_map[edge.src], vertex_map[edge.dst])
 		nedge.orig_edge_id = edge.orig_id()
 	return ng
+
 
 class Graph(object):
 	def __init__(self):
@@ -234,6 +240,7 @@ class Graph(object):
 				best_distance = d
 		return best_vertex
 
+
 def read_graph(fname, merge_duplicates=False, fpoint=False):
 	point_obj = geom.Point
 	if fpoint:
@@ -251,7 +258,7 @@ def read_graph(fname, merge_duplicates=False, fpoint=False):
 				if len(parts) >= 2:
 					point = point_obj(float(parts[0]), float(parts[1]))
 					if point in seen_points and merge_duplicates:
-						print 'merging duplicate vertex at {}'.format(point)
+						print('merging duplicate vertex at {}'.format(point))
 						vertices[next_vertex_id] = seen_points[point]
 					else:
 						vertex = graph.add_vertex(point)
@@ -264,10 +271,11 @@ def read_graph(fname, merge_duplicates=False, fpoint=False):
 				src = vertices[int(parts[0])]
 				dst = vertices[int(parts[1])]
 				if src == dst and merge_duplicates:
-					print 'ignoring self edge at {}'.format(src.point)
+					print('ignoring self edge at {}'.format(src.point))
 					continue
 				graph.add_edge(src, dst)
 	return graph
+
 
 def dijkstra_helper(src, stop_at=None, max_distance=None):
 	distances = {}
@@ -311,9 +319,11 @@ def dijkstra_helper(src, stop_at=None, max_distance=None):
 
 	return distances, prev
 
+
 def shortest_distances_from_source(src, max_distance=None):
 	distances, _ = dijkstra_helper(src, max_distance=max_distance)
 	return distances
+
 
 def shortest_path(src, dst, max_distance=None):
 	_, prev = dijkstra_helper(src, stop_at=dst, max_distance=max_distance)
@@ -329,6 +339,7 @@ def shortest_path(src, dst, max_distance=None):
 	vertex_path.reverse()
 	edge_path.reverse()
 	return vertex_path, edge_path
+
 
 # searches for the closest edge position to the specified point
 # if src is specified, only looks for edges reachable from the src edge position within remaining units
@@ -382,6 +393,7 @@ def closest_reachable_edge(point, index, explored_node_pairs=None, remaining = 5
 
 	return closest_edge_pos, closest_edge_pos_path
 
+
 def follow_graph(edge_pos, distance, explored_node_pairs=None):
 	if explored_node_pairs:
 		explored_node_pairs = set(explored_node_pairs)
@@ -413,6 +425,7 @@ def follow_graph(edge_pos, distance, explored_node_pairs=None):
 		positions = [EdgePos(edge_pos.edge, edge_pos.distance + remaining)]
 
 	return positions
+
 
 class RoadSegment(object):
 	def __init__(self, id):
@@ -497,6 +510,7 @@ class RoadSegment(object):
 		edge = self.distance_to_edge(t)
 		return edge.segment().point_at_factor(t - self.edge_distances[edge.id])
 
+
 def get_graph_road_segments(g):
 	road_segments = []
 	edge_to_rs = {}
@@ -543,11 +557,13 @@ def get_graph_road_segments(g):
 
 	return road_segments, edge_to_rs
 
+
 class GraphContainer(object):
 	def __init__(self, g):
 		self.graph = g
 		self.edge_index = g.edgeIndex()
 		self.road_segments, self.edge_to_rs = get_graph_road_segments(g)
+
 
 def mapmatch(index, road_segments, edge_to_rs, points, segment_length):
 	SIGMA = segment_length
@@ -595,9 +611,9 @@ def mapmatch(index, road_segments, edge_to_rs, points, segment_length):
 
 		return best_distance, best_rs_distance
 
-	backpointers = [{} for _ in xrange(len(points) - 1)]
+	backpointers = [{} for _ in range(len(points) - 1)]
 
-	for i in xrange(len(points) - 1):
+	for i in range(len(points) - 1):
 		next_probs = {}
 		for prev_rs_id in probs:
 			prev_p, prev_rs_distance = probs[prev_rs_id]
@@ -622,6 +638,7 @@ def mapmatch(index, road_segments, edge_to_rs, points, segment_length):
 
 	return probs, backpointers
 
+
 def mm_best_rs(road_segments, probs, rs_blacklist=None):
 	best_rs = None
 	for rs_id in probs:
@@ -632,13 +649,15 @@ def mm_best_rs(road_segments, probs, rs_blacklist=None):
 			best_rs = road_segments[rs_id]
 	return best_rs
 
+
 def mm_follow_backpointers(road_segments, rs_id, backpointers):
 	rs_list = []
-	for i in xrange(len(backpointers) - 1, -1, -1):
+	for i in range(len(backpointers) - 1, -1, -1):
 		rs_id = backpointers[i][rs_id]
 		rs_list.append(road_segments[rs_id])
 	rs_list.reverse()
 	return rs_list
+
 
 def get_nearby_vertices(vertex, n):
 	nearby_vertices = set()
@@ -653,6 +672,7 @@ def get_nearby_vertices(vertex, n):
 			search(edge.dst, remaining - 1)
 	search(vertex, n)
 	return nearby_vertices
+
 
 def get_nearby_vertices_by_distance(vertex, distance):
 	nearby_vertices = set([vertex])
@@ -670,8 +690,9 @@ def get_nearby_vertices_by_distance(vertex, distance):
 			search_queue.append((edge.dst, remaining - edge.segment().length()))
 	return nearby_vertices
 
+
 def densify(g, length, epsilon=0.1):
 	for edge in g.edges:
 		n_split = int(edge.segment().length() / length - epsilon)
-		for i in xrange(n_split):
+		for i in range(n_split):
 			edge = g.split_edge(edge, length)

@@ -19,6 +19,8 @@ import torch as tf
 import time
 
 import argparse
+
+
 parser = argparse.ArgumentParser(description='Train a RoadTracer model.')
 parser.add_argument('modelpath', help='path to save model')
 parser.add_argument('--t', help='tiles/imagery path')

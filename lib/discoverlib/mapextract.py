@@ -9,6 +9,7 @@ import numpy
 from multiprocessing import Pool
 import subprocess
 import sys
+from matplotlib import image
 
 PADDING = 30
 
@@ -16,9 +17,9 @@ in_fname = sys.argv[1]
 threshold = int(sys.argv[2])
 out_fname = sys.argv[3]
 
-im = scipy.ndimage.imread(in_fname)
+im = image.imread(in_fname)
 if len(im.shape) == 3:
-	print 'warning: bad shape {}, using first channel only'.format(im.shape)
+	print('warning: bad shape {}, using first channel only'.format(im.shape))
 	im = im[:, :, 0]
 im = numpy.swapaxes(im, 0, 1)
 im = im >= threshold

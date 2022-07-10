@@ -5,8 +5,10 @@ by http://en.wikipedia.org/wiki/Ramer-Douglas-Peucker_algorithm
 
 from math import sqrt
 
+
 def distance(a, b):
     return  sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
+
 
 def point_line_distance(point, start, end):
     if (start == end):
@@ -19,6 +21,7 @@ def point_line_distance(point, start, end):
             (end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2
         )
         return n / d
+
 
 def rdp(points, epsilon):
     """
