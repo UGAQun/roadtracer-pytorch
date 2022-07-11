@@ -1,4 +1,4 @@
-from discoverlib import geom, graph
+from lib.discoverlib import geom, graph
 
 import json
 import numpy

@@ -18,6 +18,8 @@ from PIL import Image
 from torch import nn
 import argparse
 
+import d2l.torch as d2l
+
 parser = argparse.ArgumentParser(description='Train a RoadTracer model.')
 parser.add_argument('modelpath', help='path to save model')
 parser.add_argument('--t', help='tiles/imagery path')
@@ -52,10 +54,17 @@ KERNEL_SIZE = 3
 
 
 class Model(nn.Module):
-    def __init__(self, input_channels,
-                 use_1x1conv=False, strides=1):
+    def __init__(self, input_channels):
         super().__init__()
         self.input_channels = input_channels
+
+        self.is_training = torch.bool
+        self.inputs = torch.tensor([None, 256, 256, input_channels], dtype=torch.float32)
+        self.angle_targets = torch.tensor([None, 64], dtype=torch.float32)
+        self.action_targets = torch.tensor([None, 2], dtype=torch.float32)
+        self.detect_targets = torch.tensor([None, 64, 64, 1], dtype=torch.float32)
+        self.learning_rate: float
+
         self.b1 = nn.Sequential(nn.Conv2d(in_channels=self.input_channels, out_channels=128, stride=2,
                                           kernel_size=KERNEL_SIZE, padding=1), nn.ReLU(),
                                 nn.Conv2d(128, 128, stride=1, kernel_size=KERNEL_SIZE, padding=1), nn.ReLU(),
@@ -76,6 +85,53 @@ class Model(nn.Module):
                                 nn.Conv2d(512, 512, stride=2, kernel_size=KERNEL_SIZE, padding=1), nn.ReLU())
         self.net = nn.Sequential(self.b1, self.b2)
 
+        self.detect_pre_outputs = torch.tensor()
+        self.detect_outputs = torch.tensor()
+
+        self.action_pre_outputs = torch.tensor()
+        self.action_outputs = torch.tensor()
+
+        self.angle_outputs = nn.Sequential(self.net, nn.Conv2d(512, 64, stride=2, kernel_size=KERNEL_SIZE, padding=1),
+                                           nn.Sigmoid())[:, 0, 0, :]
+
+        # self.detect_loss = tf.reduce_mean(tf.square(self.detect_targets - self.detect_outputs))
+        self.detect_loss = nn.MSELoss()
+
+        # self.angle_loss = tf.reduce_mean(
+        #     tf.reduce_mean(tf.square(self.angle_targets - self.angle_outputs), axis=1)
+        #     *
+        #     self.action_targets[:, 0]
+        # )
+        self.angle_loss = nn.MSELoss()
+
+        # self.action_loss = tf.reduce_mean(
+        #     tf.nn.softmax_cross_entropy_with_logits(labels=self.action_targets, logits=self.action_pre_outputs))
+        self.action_loss = nn.CrossEntropyLoss()
+
+        # self.loss = self.angle_loss * 50 + self.action_loss + self.detect_loss * 5
+        self.loss = torch.float32
+        self.optimizer = torch.optim.Adam(self.net.parameters(recurse=True), lr=self.learning_rate)
+
+        def forward(self, x):
+            self.detect_pre_outputs = nn.Sequential(self.b1, nn.Conv2d(256, 2, stride=1, kernel_size=KERNEL_SIZE,
+                                                                       padding=1))(x)
+            self.detect_outputs = nn.Softmax(self.detect_pre_outputs)[:, :, :, 0:1]
+            # self.action_pre_outputs = self._conv_layer(self.net, 2, 512, 2,
+            #                                            {'activation': 'none'})[:, 0, 0, :]
+            self.action_pre_outputs = nn.Sequential(self.net, nn.Conv2d(512, 2, stride=2, kernel_size=KERNEL_SIZE,
+                                                                        padding=1))(x)[:, 0, 0, :]
+            self.action_outputs = nn.Softmax(self.action_pre_outputs)
+
+            self.angle_outputs = nn.Sequential(self.net,
+                                               nn.Conv2d(512, 64, stride=2, kernel_size=KERNEL_SIZE, padding=1),
+                                               nn.Sigmoid())(x)[:, 0, 0, :]
+
+            self.loss = self.angle_loss(self.angle_targets, self.angle_outputs) * self.action_targets[:, 0] * 50 + \
+                        self.action_loss(self.action_targets, self.action_pre_outputs) + \
+                        self.detect_loss(self.detect_targets, self.detect_outputs, axis=1) * 5
+            return self.angle_outputs, self.action_outputs, self.detect_outputs, self.angle_loss, self.detect_loss, \
+                   self.action_loss, self.loss, self.net(x)
+
 
 def epoch_to_learning_rate(epoch):
     if epoch < 100:
@@ -88,18 +144,69 @@ def epoch_to_learning_rate(epoch):
         return 1e-8
 
 
+# ------------------------------------
+def train_roadtracer(net, train_iter, test_iter, num_epochs, lr, device):
+    """Train a model with a GPU (defined in Chapter 6).
+
+    Defined in :numref:`sec_lenet`"""
+    def init_weights(m):
+        if type(m) == nn.Linear or type(m) == nn.Conv2d:
+            nn.init.xavier_uniform_(m.weight)
+    net.apply(init_weights)
+    print('training on', device)
+    net.to(device)
+    optimizer = torch.optim.SGD(net.parameters(), lr=lr)
+    loss = nn.CrossEntropyLoss()
+    animator = d2l.Animator(xlabel='epoch', xlim=[1, num_epochs],
+                            legend=['train loss', 'train acc', 'test acc'])
+    timer, num_batches = d2l.Timer(), len(train_iter)
+    for epoch in range(num_epochs):
+        # Sum of training loss, sum of training accuracy, no. of examples
+        metric = d2l.Accumulator(3)
+        net.train()
+        for i, (X, y) in enumerate(train_iter):
+            timer.start()
+            optimizer.zero_grad()
+            X, y = X.to(device), y.to(device)
+            y_hat = net(X)
+            l = loss(y_hat, y)
+            l.backward()
+            optimizer.step()
+            with torch.no_grad():
+                metric.add(l * X.shape[0], d2l.accuracy(y_hat, y), X.shape[0])
+            timer.stop()
+            train_l = metric[0] / metric[2]
+            train_acc = metric[1] / metric[2]
+            # if (i + 1) % (num_batches // 5) == 0 or i == num_batches - 1:
+            #     animator.add(epoch + (i + 1) / num_batches,
+            #                  (train_l, train_acc, None))
+        test_acc = d2l.evaluate_accuracy_gpu(net, test_iter)
+    #     animator.add(epoch + 1, (None, None, test_acc))
+    # print(f'loss {train_l:.3f}, train acc {train_acc:.3f}, '
+    #       f'test acc {test_acc:.3f}')
+    # print(f'{metric[2] * num_epochs / timer.sum():.1f} examples/sec '
+    #       f'on {str(device)}')
+# -------------------------------------
+
+
+def init_weights(m):
+    if type(m) == nn.Linear or type(m) == nn.Conv2d:
+        nn.init.xavier_uniform_(m.weight)
+
+
 tiles = tileloader.Tiles(PATHS_PER_TILE_AXIS, SEGMENT_LENGTH, PARALLEL_TILES, TILE_MODE)
 tiles.prepare_training()
 test_tile_data = tiles.get_test_tile_data()
 
-m = Model(tiles.num_input_channels())
+net = Model(tiles.num_input_channels())
+net.apply(init_weights)
 
 model_path = MODEL_BASE + '/model_latest/model'
 best_path = MODEL_BASE + '/model_best/model'
 
 if os.path.isfile(model_path + '.meta'):
     print('... loading existing model')
-    m.load(model_path + '.meta')
+    net.load(model_path + '.meta')
 
 # initialize subtiles
 subtiles = []
@@ -178,7 +285,7 @@ def action_to_vector(v):
 outer_it = 0
 
 for outer_it in range(outer_it + 1, 400):
-    set_id = outer_it % num_sets
+    set_id = int(outer_it % num_sets)
     start_idx = set_id * PARALLEL_PATHS
     end_idx = min(start_idx + PARALLEL_PATHS, len(paths))
     if end_idx - start_idx < PARALLEL_PATHS / 2:
@@ -233,18 +340,17 @@ for outer_it in range(outer_it + 1, 400):
 
         # train model
         feed_dict = {
-            m.is_training: True,
-            m.inputs: batch_inputs,
-            m.angle_targets: batch_angle_targets,
-            m.action_targets: batch_action_targets,
-            m.detect_targets: batch_detect_targets,
-            m.learning_rate: epoch_to_learning_rate(outer_it),
+            net.is_training: True,
+            net.inputs: batch_inputs,
+            net.angle_targets: batch_angle_targets,
+            net.action_targets: batch_action_targets,
+            net.detect_targets: batch_detect_targets,
+            net.learning_rate: epoch_to_learning_rate(outer_it),
         }
 
         batch_angle_outputs, batch_action_outputs, batch_detect_outputs, angle_loss, detect_loss, action_loss, loss, _ \
-            = m([m.angle_outputs, m.action_outputs, m.detect_outputs, m.angle_loss, m.detect_loss, m.action_loss,
-                 m.loss, m.optimizer], feed_dict=feed_dict)
-
+            = net([net.angle_outputs, net.action_outputs, net.detect_outputs, net.angle_loss, net.detect_loss,
+                   net.action_loss, net.loss, net.optimizer], feed_dict=feed_dict)
 
         angle_losses.append(angle_loss)
         detect_losses.append(detect_loss)
@@ -324,7 +430,7 @@ for outer_it in range(outer_it + 1, 400):
             del detect_losses[:]
             del action_losses[:]
             del losses[:]
-            m.save(m.state_dict(), model_path)
+            net.save(net.state_dict(), model_path)
 
         times['save'] += time.time() - stage_time
         stage_time = time.time()
@@ -339,7 +445,7 @@ for outer_it in range(outer_it + 1, 400):
             test_tile_data = [test_tile_data]
         for t in test_tile_data:
             test_paths.append(model_utils.Path(t['gc'], t, start_loc=t['starting_locations'][1]))
-        angle_loss, detect_loss, action_loss, loss, path_length, accuracy = infer.eval(test_paths, m,
+        angle_loss, detect_loss, action_loss, loss, path_length, accuracy = infer.eval(test_paths, net,
                                                                                        max_path_length=2048,
                                                                                        segment_length=SEGMENT_LENGTH,
                                                                                        follow_targets=True,
@@ -350,7 +456,7 @@ for outer_it in range(outer_it + 1, 400):
             angle_loss, detect_loss, action_loss, loss, path_length, accuracy, best_accuracy))
         if best_accuracy is None or accuracy > best_accuracy:
             best_accuracy = accuracy
-            m.save(m.state_dict(), best_path)
+            net.save(net.state_dict(), best_path)
 
     times['test_total'] += time.time() - start_time
     print(times)

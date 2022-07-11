@@ -1,7 +1,7 @@
 import sys
 sys.path.append('../lib')
 
-from discoverlib import geom, graph
+from lib.discoverlib import geom, graph
 import model
 import model_utils
 import tileloader
