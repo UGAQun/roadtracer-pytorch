@@ -448,7 +448,7 @@ class RoadSegment(object):
 			l += edge.segment().length()
 
 	def distance_to_edge(self, distance, return_idx=False):
-		for i in xrange(len(self.edges)):
+		for i in range(len(self.edges)):
 			edge = self.edges[i]
 			distance -= edge.segment().length()
 			if distance <= 0:

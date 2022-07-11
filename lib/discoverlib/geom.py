@@ -1,6 +1,7 @@
 import math
 import numpy
 
+
 class Point(object):
 	def __init__(self, x, y):
 		self.x = int(x)
@@ -62,6 +63,7 @@ class Point(object):
 	def __hash__(self):
 		return hash((self.x, self.y))
 
+
 class FPoint(object):
 	def __init__(self, x, y):
 		self.x = float(x)
@@ -121,6 +123,7 @@ class FPoint(object):
 
 	def __hash__(self):
 		return hash((self.x, self.y))
+
 
 class Segment(object):
 	def __init__(self, start, end):
@@ -190,6 +193,7 @@ class Segment(object):
 	def __repr__(self):
 		return 'Segment({}, {})'.format(self.start, self.end)
 
+
 class Rectangle(object):
 	def __init__(self, start, end):
 		self.start = start
@@ -251,6 +255,7 @@ class Rectangle(object):
 	def __repr__(self):
 		return 'Rectangle({}, {})'.format(self.start, self.end)
 
+
 def draw_line(start, end, lengths):
 	# followX indicates whether to move along x or y coordinates
 	followX = abs(end.y - start.y) <= abs(end.x - start.x)
@@ -300,8 +305,9 @@ def draw_line(start, end, lengths):
 
 	return points
 
+
 def draw_lines(segments, im=None, shape=None):
-	from eyediagram._brescount import bres_segments_count
+	from eyediagram.eyediagram.brescount import bres_segments_count
 	if not shape:
 		if not im:
 			raise Exception('shape or im must be provided')
@@ -317,6 +323,7 @@ def draw_lines(segments, im=None, shape=None):
 		return numpy.logical_or(im, tmpim)
 	else:
 		return tmpim
+
 
 def vector_from_angle(angle, length):
 	return Point(math.cos(angle) * length, math.sin(angle) * length)

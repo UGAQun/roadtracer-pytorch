@@ -77,7 +77,6 @@ class Model(nn.Module):
         self.net = nn.Sequential(self.b1, self.b2)
 
 
-
 def epoch_to_learning_rate(epoch):
     if epoch < 100:
         return 1e-5
@@ -242,9 +241,10 @@ for outer_it in range(outer_it + 1, 400):
             m.learning_rate: epoch_to_learning_rate(outer_it),
         }
 
-        batch_angle_outputs, batch_action_outputs, batch_detect_outputs, angle_loss, detect_loss, action_loss, loss, _ = session.run(
-            [m.angle_outputs, m.action_outputs, m.detect_outputs, m.angle_loss, m.detect_loss, m.action_loss, m.loss,
-             m.optimizer], feed_dict=feed_dict)
+        batch_angle_outputs, batch_action_outputs, batch_detect_outputs, angle_loss, detect_loss, action_loss, loss, _ \
+            = m([m.angle_outputs, m.action_outputs, m.detect_outputs, m.angle_loss, m.detect_loss, m.action_loss,
+                 m.loss, m.optimizer], feed_dict=feed_dict)
+
 
         angle_losses.append(angle_loss)
         detect_losses.append(detect_loss)

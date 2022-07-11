@@ -11,12 +11,13 @@ import math
 import numpy
 from multiprocessing import Pool
 import subprocess
+from matplotlib import image
 
 in_fname = sys.argv[1]
 threshold = int(sys.argv[2])
 out_fname = sys.argv[3]
 
-im = scipy.ndimage.imread(in_fname)
+im = image.imread(in_fname)
 im = numpy.swapaxes(im, 0, 1)
 im = im > threshold
 

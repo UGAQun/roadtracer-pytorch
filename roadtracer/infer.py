@@ -2,8 +2,8 @@ import sys
 
 sys.path.append('../lib')
 
-from discoverlib import geom, graph
-import model
+from lib.discoverlib import geom, graph
+import model_pytorch
 import model_utils
 import tileloader
 
@@ -13,7 +13,7 @@ import os.path
 from PIL import Image
 import random
 import scipy.ndimage
-import tensorflow as tf
+# import tensorflow as tf
 import time
 
 MAX_PATH_LENGTH = 500000
@@ -50,14 +50,14 @@ def action_to_vector(v):
     angle_outputs = numpy.zeros((64,), dtype='float32')
     stop_outputs = numpy.zeros((2,), dtype='float32')
     count = 0
-    for i in xrange(len(v)):
+    for i in range(len(v)):
         if v[i] > 0.9:
             count += 1
     if count == 0:
         stop_outputs[1] = 1
     else:
         stop_outputs[0] = 1
-        for i in xrange(len(v)):
+        for i in range(len(v)):
             if v[i] > 0.9:
                 angle_outputs[i] = 1.0 / count
     return angle_outputs, stop_outputs
@@ -68,14 +68,15 @@ def fix_outputs(batch_angle_outputs, batch_stop_outputs):
         return batch_angle_outputs, batch_stop_outputs
     elif batch_angle_outputs.shape[1] == 65:
         fixed_stop_outputs = numpy.zeros((batch_angle_outputs.shape[0], 2), dtype='float32')
-        for i in xrange(batch_angle_outputs.shape[0]):
+        for i in range(batch_angle_outputs.shape[0]):
             if numpy.argmax(batch_angle_outputs[i, :]) == 64:
                 fixed_stop_outputs[i, 1] = 1
             else:
                 fixed_stop_outputs[i, 0] = 1
         return batch_angle_outputs[:, 0:64], fixed_stop_outputs
     else:
-        raise Exception("bad angle_outputs length={}".format(len(angle_outputs)))
+        # raise Exception("bad angle_outputs length={}".format(len(angle_outputs)))
+        raise Exception("bad angle_outputs length={}".format(len(batch_angle_outputs[1])))
 
 
 def score_accuracy(stop_targets, angle_targets, stop_outputs, angle_outputs, threshold, action_only=False):
@@ -101,7 +102,7 @@ def score_accuracy(stop_targets, angle_targets, stop_outputs, angle_outputs, thr
 
 
 def eval(paths, m, max_path_length=MAX_PATH_LENGTH, segment_length=SEGMENT_LENGTH, save=False, follow_targets=False,
-         compute_targets=True, max_batch_size=model.BATCH_SIZE, window_size=WINDOW_SIZE, verbose=True,
+         compute_targets=True, max_batch_size=model_pytorch.BATCH_SIZE, window_size=WINDOW_SIZE, verbose=True,
          threshold_override=False):
     angle_losses = []
     detect_losses = []
@@ -195,7 +196,8 @@ def eval(paths, m, max_path_length=MAX_PATH_LENGTH, segment_length=SEGMENT_LENGT
             elif follow_targets == 'partial':
                 # (a) always use stop_targets instead of stop_outputs
                 # (b) if we are far away from graph, use angle_targets, otherwise use angle_outputs
-                extension_vertex = batch_extension_vertices[i]
+                # extension_vertex = batch_extension_vertices[i]
+                extension_vertex = extension_vertices[i]
                 if extension_vertex.edge_pos is None or extension_vertex.edge_pos.point().distance(
                         extension_vertex.point) > SEGMENT_LENGTH * 2:
                     x = vector_to_action(batch_angle_targets[i, :], batch_stop_targets[i, :], threshold=threshold)
@@ -297,10 +299,10 @@ if __name__ == '__main__':
     tiles = tileloader.Tiles(PATHS_PER_TILE_AXIS, SEGMENT_LENGTH, 16, TILE_MODE)
 
     print('initializing model')
-    model.BATCH_SIZE = 1
-    m = model.Model(tiles.num_input_channels())
-    session = tf.Session()
-    m.saver.restore(session, model_path)
+    model_pytorch.BATCH_SIZE = 1
+    m = model_pytorch.Model(tiles.num_input_channels())
+    # session = tf.Session()
+    m.load(model_path)
 
     if EXISTING_GRAPH_FNAME is None:
         rect = geom.Rectangle(TILE_START, TILE_END)
@@ -348,7 +350,7 @@ if __name__ == '__main__':
             'region': REGION,
             'rect': r.add_tol(WINDOW_SIZE / 2),
             'search_rect': r,
-            'cache': cache,
+            # 'cache': cache,
             'starting_locations': [],
         }
         path = model_utils.Path(None, tile_data, g=g)
@@ -374,10 +376,10 @@ if __name__ == '__main__':
             # path._add_bidirectional_edge(v1, v2)
             path.prepend_search_vertex(v1)
             path.prepend_search_vertex(v2)
-            result = eval([path], m, session, save=False, compute_targets=compute_targets,
+            result = eval([path], m, save=False, compute_targets=compute_targets,
                           follow_targets=FOLLOW_TARGETS)
     else:
-        result = eval([path], m, session, save=SAVE_EXAMPLES, compute_targets=compute_targets,
+        result = eval([path], m, save=SAVE_EXAMPLES, compute_targets=compute_targets,
                       follow_targets=FOLLOW_TARGETS)
     print(result)
     if args.f > 0:

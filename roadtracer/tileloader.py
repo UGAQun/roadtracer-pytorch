@@ -1,3 +1,7 @@
+import sys
+
+sys.path.append('../lib')
+
 from discoverlib import geom
 from discoverlib import graph
 import model_utils
